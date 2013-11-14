@@ -11,6 +11,16 @@ namespace Utilities.Queues
     public class IntervalQueue<T> : ConcurrentQueue<T>
     {
         /// <summary>
+        /// Type of the argument.
+        /// </summary>
+        private Type typeOfT;
+
+        /// <summary>
+        /// If the TimePropertyName is specified, its PropertyInfo is stored for future use. 
+        /// </summary>
+        private PropertyInfo timeProperty;
+
+        /// <summary>
         /// Window Size.
         /// </summary>
         public TimeSpan Interval { get; private set; }
@@ -20,50 +30,92 @@ namespace Utilities.Queues
         /// </summary>
         public string TimePropertyName { get; private set; }
 
+        /// <summary>
+        /// Whether 
+        /// </summary>
+        private bool UseSystemTime;
+
+        /// <summary>
+        /// DateTime of the first element in Queue.
+        /// </summary>
+        public DateTime FirstDate;
+
+        /// <summary>
+        /// DateTime of the last element in Queue.
+        /// </summary>
+        public DateTime LastDate;
+
+        private ConcurrentQueue<DateTime> DatesQueue; 
+
         public IntervalQueue(TimeSpan interval)
         {
-            Interval = interval;
+            OnConstruct(interval, "");
         }
 
         public IntervalQueue(TimeSpan interval, string timePropertyName)
         {
-            Interval = interval;
-            TimePropertyName = timePropertyName;
-
-        }
-
-        // TODO: Implementing method to ensure Type has Time Property.
-        private void EnsureTypeHasProperty()
-        {
-            if (string.IsNullOrEmpty(TimePropertyName))
-            {
-                //if (TypeHasTimeProperty("Timestamp")) 
-            }
-            else
-            {
-
-            }
-            //throw new MissingFieldException(type.Name, TimePropertyName);
+            OnConstruct(interval, timePropertyName);
         }
 
         /// <summary>
-        /// Checks if type T has a property called 'TimePropertyName' of type 'DateTime'.
+        /// Generic function to be called in every constructor to avoid code redundancy.
         /// </summary>
-        /// <param name="timePropertyName">Property Name</param>
-        /// <returns>If property exists and is a DateTime.</returns>
-        private bool TypeHasTimeProperty(string timePropertyName)
+        /// <param name="interval">Window Size in TimeSpan</param>
+        /// <param name="timePropertyName">Name of the Time Property</param>
+        private void OnConstruct(TimeSpan interval, string timePropertyName)
         {
-            Type type = typeof(T);
-            PropertyInfo property = type.GetProperty(timePropertyName);
-            if (property == null)
-            {
-                return false;
-            }
-
-            return property.PropertyType == typeof(DateTime);
+            Interval = interval;
+            TimePropertyName = timePropertyName;
+            typeOfT = typeof(T);
+            UseSystemTime = string.IsNullOrEmpty(timePropertyName);
+            EnsureTypeHasDateTimeProperty();
+            DatesQueue = new ConcurrentQueue<DateTime>();
         }
+
+        /// <summary>
+        /// Ensures T has the property defined in TimePropertyName of type DateTime.
+        /// TimePropertyName is case sensitive.
+        /// </summary>
+        private void EnsureTypeHasDateTimeProperty()
+        {
+            if (!UseSystemTime)
+            {
+                PropertyInfo property = typeOfT.GetProperty(TimePropertyName);
+                if (property == null) throw new MissingFieldException(typeOfT.FullName, TimePropertyName);
+                if (property.PropertyType != typeof(DateTime)) throw new MissingFieldException(string.Format("Property '{0}.{1}' is not of DateTime type.", typeOfT.FullName, TimePropertyName));
+                timeProperty = property;
+            }
+        }
+
+        /// <summary>
+        /// Adds a new item to the queue. 
+        /// Old itens will be dequeued until all elements in queue are within the Time Window.
+        /// </summary>
+        /// <param name="item">Item to be enqueued.</param>
         public new void Enqueue(T item)
         {
+            DateTime currentTime = UseSystemTime ? DateTime.UtcNow : (DateTime)timeProperty.GetValue(item);
+
+            base.Enqueue(item);
+            DatesQueue.Enqueue(currentTime);
+
+            lock (this)
+            {
+                // First Date
+                DatesQueue.TryPeek(out FirstDate);
+
+                // Last Date
+                LastDate = currentTime;
+
+                while (LastDate.Subtract(FirstDate).CompareTo(Interval) > 0)
+                {
+                    T overflow;
+                    base.TryDequeue(out overflow);
+                    FirstDate = (DateTime)timeProperty.GetValue(overflow);
+                }
+            }
+
+            
 
         }
     }
