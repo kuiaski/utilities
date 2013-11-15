@@ -45,13 +45,25 @@ namespace Utilities.Queues
         /// </summary>
         public DateTime LastDate;
 
-        private ConcurrentQueue<DateTime> DatesQueue; 
-
+        /// <summary>
+        /// Queue for event Dates. 
+        /// </summary>
+        private ConcurrentQueue<DateTime> DatesQueue;
+        
+        /// <summary>
+        /// Creates a new instance of a IntervalQueue using enqueueing Time as Date handler.
+        /// </summary>
+        /// <param name="interval">Window Size.</param>
         public IntervalQueue(TimeSpan interval)
         {
             OnConstruct(interval, "");
         }
 
+        /// <summary>
+        /// Creates a new instance of a IntervalQueue, retrieving Time from an object's property.
+        /// </summary>
+        /// <param name="interval"></param>
+        /// <param name="timePropertyName"></param>
         public IntervalQueue(TimeSpan interval, string timePropertyName)
         {
             OnConstruct(interval, timePropertyName);
@@ -111,12 +123,25 @@ namespace Utilities.Queues
                 {
                     T overflow;
                     base.TryDequeue(out overflow);
-                    FirstDate = (DateTime)timeProperty.GetValue(overflow);
+
+                    DateTime dateOverflow;
+                    DatesQueue.TryDequeue(out dateOverflow);
+
+                    // First Date
+                    DatesQueue.TryPeek(out FirstDate);
                 }
             }
+        }
 
-            
-
+        /// <summary>
+        /// Tries to remove an item from the Queue.
+        /// </summary>
+        /// <param name="item">Item to be removed from the Queue.</param>
+        /// <returns>TRUE if succeeded, FALSE if not.</returns>
+        public new bool TryDequeue(out T item)
+        {
+            DateTime dateOverflow;
+            return base.TryDequeue(out item) && DatesQueue.TryDequeue(out dateOverflow);
         }
     }
 }

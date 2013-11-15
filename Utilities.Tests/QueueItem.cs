@@ -4,12 +4,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace UtilitiesConsole
+namespace Utilities.Tests
 {
-    class Program
+    class QueueItem
     {
-        static void Main(string[] args)
-        {
-        } 
+        public DateTime EventTime { get; set; }
+        public int Value { get; set; }
     }
 }
